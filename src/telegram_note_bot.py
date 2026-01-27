@@ -14,7 +14,6 @@ from telegram.ext import (
 )
 import src.secrets as secrets  # API_TOKEN = '<ТОКЕN>'
 
-import asyncio
 
 # Включение логирования
 logging.basicConfig(
@@ -41,7 +40,7 @@ def build_note(lc_note_text, lc_note_name) -> str:
             return f"Заметка {lc_note_name} создана."
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
-
+        return f'Произошла ошибка: {err}'
 
 # запуск ввода данных для создания заметок
 async def create_note_handler(update, context) -> int:
@@ -51,6 +50,7 @@ async def create_note_handler(update, context) -> int:
         return NAME
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return NAME
 
 
 # получение имени заметки для создания
@@ -64,6 +64,7 @@ async def get_name_note_create(update, context) -> int:
         return TEXT
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return TEXT
 
 
 # получение текста заметки + создание заметки
@@ -78,6 +79,7 @@ async def get_text_note(update, context) -> int:
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return ConversationHandler.END
 
 
 async def cancel(update, context) -> int:
@@ -89,6 +91,7 @@ async def cancel(update, context) -> int:
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return ConversationHandler.END
 
 
 # обработчик для команды /start
@@ -128,6 +131,7 @@ def read_note(note_name) -> str:
             return f"Заметка {note_name} не найдена."
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return f'Произошла ошибка: {err}'
 
 
 # получение имени заметки для чтения и вывод в чат если есть, если нет сообщение нет
@@ -142,9 +146,10 @@ async def get_name_note_read(update, context) -> int:
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return ConversationHandler.END
 
 
-async def create_read_handler(update, context) -> None:
+async def create_read_handler(update, context) -> int:
     """Обработчик для команды read"""
     try:
         await update.message.reply_text('Введите имя заметки для чтения: ')
@@ -152,6 +157,7 @@ async def create_read_handler(update, context) -> None:
     except AttributeError as err:
         # Отправить пользователю сообщение об ошибке
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
+        return NAME
 
 
 def edit_note(note_name, note_text) -> str:
@@ -163,10 +169,14 @@ def edit_note(note_name, note_text) -> str:
                 file.write(note_text)
             logger.info(f"Заметка {note_name} обновлена.")
             return f"Заметка {note_name} обновлена."
+        else:
+            return 'Пустое имя файла'
     except FileNotFoundError:
-        logger.error(f"Невозможно создать файл с именем {note_name}")
+        logger.error(f'Невозможно создать файл с именем {note_name}')
+        return f'Невозможно создать файл с именем {note_name}'
     except AttributeError as err:
         logger.error(f'Произошла ошибка : {err}')
+        return f'Произошла ошибка : {err}'
 
 
 async def get_name_note_edit(update, context) -> int:
@@ -185,6 +195,7 @@ async def get_name_note_edit(update, context) -> int:
             return NAME
     except AttributeError as err:
         logger.error(f'Произошла ошибка : {err}')
+        return NAME
 
 
 async def get_text_note_edit(update, context) -> int:
@@ -198,9 +209,10 @@ async def get_text_note_edit(update, context) -> int:
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка : {err}')
+        return ConversationHandler.END
 
 
-async def create_edit_handler(update, context) -> None:
+async def create_edit_handler(update, context) -> int:
     """Обработчик для команды edit"""
     try:
         await update.message.reply_text('Введите имя заметки для редактирования: ')
@@ -208,6 +220,7 @@ async def create_edit_handler(update, context) -> None:
     except AttributeError as err:
         # Отправить пользователю сообщение об ошибке
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
+        return NAME
 
 
 def delete_note(note_name) -> str:
@@ -224,8 +237,10 @@ def delete_note(note_name) -> str:
             return f"Заметка  {note_name} не найдена."
     except FileNotFoundError:
         logger.error(f"Файл с именем {note_name}.txt не найден.")
+        return f"Файл с именем {note_name}.txt не найден."
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return f'Произошла ошибка: {err}'
 
 
 async def get_name_note_delete(update, context) -> int:
@@ -239,6 +254,7 @@ async def get_name_note_delete(update, context) -> int:
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return ConversationHandler.END
 
 
 async def create_delete_handler(update, context) -> int:
@@ -249,6 +265,7 @@ async def create_delete_handler(update, context) -> int:
     except AttributeError as err:
         # Отправить пользователю сообщение об ошибке
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
+        return NAME
 
 
 async def display_sorted_notes(update, context) -> None:
@@ -408,4 +425,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
