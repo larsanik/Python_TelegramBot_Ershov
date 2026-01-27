@@ -1,7 +1,5 @@
 # *****************************************************************************
-# Задание 7. Подключите бота к Telegram.
-# Используйте Telegram API, чтобы создать бота в Telegram.
-# Вынес в отдельный исходник, так как от notepad2 почти ничего не остается =о)
+# Задание №3. Добавьте в приложение класс calendar
 # *****************************************************************************
 
 import logging
@@ -46,48 +44,48 @@ def build_note(lc_note_text, lc_note_name) -> str:
 
 
 # запуск ввода данных для создания заметок
-def create_note_handler(update, context) -> int:
+async def create_note_handler(update, context) -> int:
     """Запрос имени заметки."""
     try:
-        update.message.reply_text('Введите имя заметки: ')
+        await update.message.reply_text('Введите имя заметки: ')
         return NAME
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
 
 
 # получение имени заметки для создания
-def get_name_note_create(update, context) -> int:
+async def get_name_note_create(update, context) -> int:
     """Запрос текста заметки."""
     try:
         user = update.message.from_user
         logger.info(f"Пользователь:  {user.first_name}. Имя создаваемой заметки: {update.message.text}.")
         context.user_data['note_name'] = update.message.text
-        update.message.reply_text('Введите текст заметки: ')
+        await update.message.reply_text('Введите текст заметки: ')
         return TEXT
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
 
 
 # получение текста заметки + создание заметки
-def get_text_note(update, context) -> int:
+async def get_text_note(update, context) -> int:
     """Выход из опроса."""
     try:
         user = update.message.from_user
         logger.info(f"Пользователь:  {user.first_name}. Текст создаваемой заметки: {update.message.text}")
         context.user_data['note_text'] = update.message.text
         # создаем заметку и выводим сообщение о результате
-        update.message.reply_text(build_note(context.user_data['note_text'], context.user_data['note_name']))  #
+        await update.message.reply_text(build_note(context.user_data['note_text'], context.user_data['note_name']))  #
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
 
 
-def cancel(update, context) -> int:
+async def cancel(update, context) -> int:
     """Выход из диалога по команде /cancel."""
     try:
         user = update.message.from_user
         logger.info(f"Пользователь {user.first_name} вышел из диалога.")
-        update.message.reply_text('Запрос данных прерван пользователем.')
+        await update.message.reply_text('Запрос данных прерван пользователем.')
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
@@ -133,14 +131,14 @@ def read_note(note_name) -> str:
 
 
 # получение имени заметки для чтения и вывод в чат если есть, если нет сообщение нет
-def get_name_note_read(update, context) -> int:
+async def get_name_note_read(update, context) -> int:
     """Запрос имени заметки для чтения."""
     try:
         user = update.message.from_user
         logger.info(f"Пользователь:  {user.first_name}. Имя заметки для чтения : {update.message.text}.")
         context.user_data['note_name'] = update.message.text
         # создаем заметку и выводим сообщение о результате
-        update.message.reply_text(read_note(context.user_data['note_name']))
+        await update.message.reply_text(read_note(context.user_data['note_name']))
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
@@ -253,7 +251,7 @@ async def create_delete_handler(update, context) -> int:
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
 
 
-def display_sorted_notes(update, context) -> None:
+async def display_sorted_notes(update, context) -> None:
     """Выводит все заметки пользователя в порядке уменьшения длинны"""
     try:
         # формирование списка файлов с заметками
@@ -268,8 +266,8 @@ def display_sorted_notes(update, context) -> None:
         # вывод заметок в порядке уменьшения длинны
         for i in sorted_notes:
             with open(i[0], "r", encoding="utf-8") as file:
-                update.message.reply_text(f'Заметка "{i[0]}".')
-                update.message.reply_text(file.read())
+                await update.message.reply_text(f'Заметка "{i[0]}".')
+                await update.message.reply_text(file.read())
     except AttributeError as err:  # не приходит в голову ситуация вызывающая ошибку =/
         logger.error(f'Произошла ошибка: {err}')
 
