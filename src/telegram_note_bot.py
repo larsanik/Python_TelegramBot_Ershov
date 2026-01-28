@@ -350,7 +350,7 @@ def main() -> None:
         #updater.dispatcher.add_handler(CommandHandler('start', create_start_handler))
         application.add_handler(CommandHandler('start', create_start_handler))
 
-        # диалог для создания заметки, шаги NAME, ТEXT
+        # диалог для создания заметки, шаги NAME, TEXT
         conv_handler_create = ConversationHandler(
             entry_points=[CommandHandler('create', create_note_handler)],
             states={
@@ -373,7 +373,7 @@ def main() -> None:
         #dispatcher.add_handler(conv_handler_read)
         application.add_handler(conv_handler_read)
 
-        # диалог для редактирования заметки, шаги NAME, ТEXT
+        # диалог для редактирования заметки, шаги NAME, TEXT
         conv_handler_edit = ConversationHandler(
             entry_points=[CommandHandler('edit', create_edit_handler)],
             states={
