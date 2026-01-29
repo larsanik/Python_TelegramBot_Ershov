@@ -13,7 +13,7 @@ from telegram.ext import (
     ConversationHandler
 )
 import src.secrets as secrets  # API_TOKEN = '<ТОКЕN>'
-
+from src.Calendar import Calendar
 
 # Включение логирования
 logging.basicConfig(
@@ -332,9 +332,32 @@ async def help_view(update, context) -> None:
         /key_on - включение виртуальной клавиатуры
         /key_off - выключение виртуальной клавиатуры
         /help - выводит справку по командам
+        /create_event - создание события
         """
                               )
 
+# ***************** Calendar **********************
+# Зададим глобально доступный объект календаря
+calendar = Calendar()
+
+# Создать обработчик для создания событий
+async def event_create_handler(update, context) -> None:
+    try:
+        # Взять данные о событии из сообщения пользователя
+        event_name = update.message.text[14:]
+        event_date = "2023-03-14"
+        event_time = "14:00"
+        event_details = "Описание события"
+
+        # Создать событие с помощью метода create_event класса Calendar
+        event_id = calendar.create_event(event_name, event_date, event_time, event_details)
+
+        # Отправить пользователю подтверждение
+        context.bot.send_message(chat_id=update.message.chat_id,
+                                 text=f"Событие {event_name} создано и имеет номер {event_id}.")
+    except AttributeError as err:
+        # Отправить пользователю сообщение об ошибке
+        context.bot.send_message(chat_id=update.message.chat_id, text=f"При создании события произошла ошибка {err}.")
 
 def main() -> None:
     """Запуск бота."""
@@ -411,6 +434,11 @@ def main() -> None:
         # обработка команды /help
         #updater.dispatcher.add_handler(CommandHandler('help', help_view))
         application.add_handler(CommandHandler('help', help_view))
+
+# ************************ Calendar **************************
+        # Зарегистрировать обработчик, чтобы он вызывался по команде /create_event
+        application.add_handler(CommandHandler('create_event', event_create_handler))
+# *************************************************************
 
         # запуск бота
         #updater.start_polling()
