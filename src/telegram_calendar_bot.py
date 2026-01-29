@@ -38,7 +38,7 @@ def cancel(update, context):
 
 
 # обработчик для команды /start
-def create_start_handler(update, context):
+async def create_start_handler(update, context):
     """Формирование сообщения пользователю по команде start."""
     try:
         msg_start = """ Бот для работы с событиями календаря.
@@ -54,13 +54,13 @@ def create_start_handler(update, context):
         /display_event - вывод списка событий
         /help - выводит справку по командам
         """
-        context.bot.send_message(chat_id=update.message.chat_id, text=msg_start)
+        await context.bot.send_message(chat_id=update.message.chat_id, text=msg_start)
     except AttributeError as err:
         # Отправить пользователю сообщение об ошибке
-        context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
+        await context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
 
 
-def key_on(update, context) -> None:
+async def key_on(update, context) -> None:
     """Добавляет виртуальную клавиатуру с командами"""
     reply_keyboard = [['/start'],
                       ['/key_off'],
@@ -71,7 +71,7 @@ def key_on(update, context) -> None:
                       ['/delete_event'],
                       ['/display_event']]
 
-    update.message.reply_text(
+    await update.message.reply_text(
         'Виртуальная клавиатура добавлена в бот.',
         reply_markup=ReplyKeyboardMarkup(
             reply_keyboard, resize_keyboard=True, one_time_keyboard=True,
@@ -80,17 +80,17 @@ def key_on(update, context) -> None:
     )
 
 
-def key_off(update, context) -> None:
+async def key_off(update, context) -> None:
     """Убирает виртуальную клавиатуру с командами"""
-    update.message.reply_text(
+    await update.message.reply_text(
         'Виртуальная клавиатура убрана из бота.',
         reply_markup=ReplyKeyboardRemove(),
     )
 
 
-def help_view(update, context) -> None:
+async def help_view(update, context) -> None:
     """Выводит справку по командам"""
-    update.message.reply_text(""" Бот для работы с заметками.
+    await update.message.reply_text(""" Бот для работы с заметками.
         Команды:
         /start - запуск бота
         /cancel - выход из диалога
@@ -168,14 +168,14 @@ def main() -> None:
         application.add_handler(CommandHandler('key_off', key_off))
 
         # обработка команды /help
-        application.dispatcher.add_handler(CommandHandler('help', help_view))
+        application.add_handler(CommandHandler('help', help_view))
 
         # ***************************
         # глобально доступный объект календаря
         calendar = Calendar()
 
         # обработчик для создания событий
-        def event_create_handler(update, context) -> None:
+        async def event_create_handler(update, context) -> None:
             try:
                 # Взять данные о событии из сообщения пользователя
                 event_name = update.message.text[14:]
@@ -187,18 +187,18 @@ def main() -> None:
                 event_id = calendar.create_event(event_name, event_date, event_time, event_details)
 
                 # Отправить пользователю подтверждение
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f"Событие {event_name} создано и имеет номер {event_id}.")
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При создании события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /create_event
         application.add_handler(CommandHandler('create_event', event_create_handler))
 
         # обработчик для чтения событий
-        def event_read_handler(update, context) -> None:
+        async def event_read_handler(update, context) -> None:
             try:
                 text = update.message.text.replace('/read_event', '').replace(' ', '')  # оставляем только номер
                 if text.isdigit():  # проверяем, что номер события число
@@ -206,22 +206,22 @@ def main() -> None:
                 else:
                     id_event = 0  # так как нумерация событий начинается с 1
                 if id_event in calendar.events.keys():
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=calendar.read_event(id_event=id_event))
                 else:
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=f'Событие с номером {text} не найдено. Формат команды: '
                                                   f'/read_event <номер события> ')
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При чтении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /read_event
         application.add_handler(CommandHandler('read_event', event_read_handler))
 
         # обработчик для редактирования событий
-        def event_edit_handler(update, context) -> int:
+        async def event_edit_handler(update, context) -> int :
             try:
                 text = update.message.text.replace('/edit_event', '').replace(' ', '')  # оставляем только номер
                 if text.isdigit():  # проверяем, что номер события число
@@ -230,31 +230,32 @@ def main() -> None:
                     id_event = 0  # так как нумерация событий начинается с 1
                 if id_event in calendar.events.keys():
                     context.user_data['id_event'] = id_event
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text='Введите новое описание события.')
                     return ID
                 else:
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=f'Событие с номером {text} не найдено. Формат команды: '
                                                   f'/edit_event <номер события> ')
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При редактировании события произошла ошибка {error_info}.')
 
+
         # редактирование события
-        def edit_event(update, context) -> None:
+        async def edit_event(update, context) -> None:
             try:
                 calendar.edit_event(context.user_data['id_event'], update.message.text)
                 # Отправить пользователю подтверждение
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f"Событие {context.user_data['id_event']} отредактировано.")
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При редактировании события произошла ошибка {error_info}.')
 
-        # диалог для редактирования события, шаги ID, ТEXT
+        # диалог для редактирования события, шаги ID, TEXT
         conv_handler_edit_event = ConversationHandler(
             entry_points=[CommandHandler('edit_event', event_edit_handler)],
             states={
@@ -265,7 +266,7 @@ def main() -> None:
         application.add_handler(conv_handler_edit_event)
 
         # обработчик для удаления событий
-        def event_delete_handler(update, context) -> None:
+        async def event_delete_handler(update, context) -> None:
             try:
                 text = update.message.text.replace('/delete_event', '').replace(' ', '')  # оставляем только номер
                 if text.isdigit():  # проверяем, что номер события число
@@ -273,32 +274,32 @@ def main() -> None:
                 else:
                     id_event = 0  # так как нумерация событий начинается с 1
                 if id_event in calendar.events.keys():
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=calendar.delete_event(id_event=id_event))
                 else:
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=f'Событие с номером {text} не найдено. Формат команды: '
                                                   f'/delete_event <номер события> ')
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При удалении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
         application.add_handler(CommandHandler('delete_event', event_delete_handler))
 
         # обработчик для вывода списка событий
-        def event_display_handler(update, context) -> None:
+        async def event_display_handler(update, context) -> None:
             try:
                 if calendar.events:
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=calendar.display_event())
                 else:
-                    context.bot.send_message(chat_id=update.message.chat_id,
+                    await context.bot.send_message(chat_id=update.message.chat_id,
                                              text='В календаре нет событий.')
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
-                context.bot.send_message(chat_id=update.message.chat_id,
+                await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При удалении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
