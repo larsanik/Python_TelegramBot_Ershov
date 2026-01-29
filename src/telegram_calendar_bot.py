@@ -7,13 +7,13 @@ import logging
 import datetime
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     MessageHandler,
-    Filters,
+    filters,
     ConversationHandler
 )
-import secrets  # API_TOKEN = '<ТОКЕN>'
+import src.secrets as secrets  # API_TOKEN = '<ТОКЕN>'
 
 # Включение логирования
 logging.basicConfig(
@@ -156,22 +156,19 @@ def main() -> None:
     """Запуск бота."""
     try:
         # создание обработчика с токеном
-        updater = Updater(token=secrets.API_TOKEN)
-
-        # получение диспетчера
-        dispatcher = updater.dispatcher
+        application = Application.builder().token(secrets.API_TOKEN).build()
 
         # обработка команды /start
-        updater.dispatcher.add_handler(CommandHandler('start', create_start_handler))
+        application.add_handler(CommandHandler('start', create_start_handler))
 
         # обработка команды /key_on
-        updater.dispatcher.add_handler(CommandHandler('key_on', key_on))
+        application.add_handler(CommandHandler('key_on', key_on))
 
         # обработка команды /key_off
-        updater.dispatcher.add_handler(CommandHandler('key_off', key_off))
+        application.add_handler(CommandHandler('key_off', key_off))
 
         # обработка команды /help
-        updater.dispatcher.add_handler(CommandHandler('help', help_view))
+        application.dispatcher.add_handler(CommandHandler('help', help_view))
 
         # ***************************
         # глобально доступный объект календаря
@@ -198,7 +195,7 @@ def main() -> None:
                                          text=f'При создании события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /create_event
-        updater.dispatcher.add_handler(CommandHandler('create_event', event_create_handler))
+        application.add_handler(CommandHandler('create_event', event_create_handler))
 
         # обработчик для чтения событий
         def event_read_handler(update, context) -> None:
@@ -221,7 +218,7 @@ def main() -> None:
                                          text=f'При чтении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /read_event
-        updater.dispatcher.add_handler(CommandHandler('read_event', event_read_handler))
+        application.add_handler(CommandHandler('read_event', event_read_handler))
 
         # обработчик для редактирования событий
         def event_edit_handler(update, context) -> int:
@@ -261,11 +258,11 @@ def main() -> None:
         conv_handler_edit_event = ConversationHandler(
             entry_points=[CommandHandler('edit_event', event_edit_handler)],
             states={
-                ID: [MessageHandler(Filters.text & ~Filters.command, edit_event)],
+                ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_event)],
             },
             fallbacks=[CommandHandler('cancel', cancel)],  # принудительный выход из диалога по команде /cancel
         )
-        dispatcher.add_handler(conv_handler_edit_event)
+        application.add_handler(conv_handler_edit_event)
 
         # обработчик для удаления событий
         def event_delete_handler(update, context) -> None:
@@ -288,7 +285,7 @@ def main() -> None:
                                          text=f'При удалении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
-        updater.dispatcher.add_handler(CommandHandler('delete_event', event_delete_handler))
+        application.add_handler(CommandHandler('delete_event', event_delete_handler))
 
         # обработчик для вывода списка событий
         def event_display_handler(update, context) -> None:
@@ -305,13 +302,13 @@ def main() -> None:
                                          text=f'При удалении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
-        updater.dispatcher.add_handler(CommandHandler('display_event', event_display_handler))
+        application.add_handler(CommandHandler('display_event', event_display_handler))
 
         # запуск бота
-        updater.start_polling()
+        application.run_polling()
 
         # для корректной остановки бота по запросу из ide
-        updater.idle()
+        application.idle()
 
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
