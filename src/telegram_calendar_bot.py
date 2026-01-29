@@ -23,18 +23,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # шаги ввода данных
-ID = range(1)
+ID = 1 # range(1)
 
 
-def cancel(update, context):
+async def cancel(update, context) -> int:
     """Выход из диалога по команде /cancel."""
     try:
         user = update.message.from_user
         logger.info(f"Пользователь {user.first_name} вышел из диалога.")
-        update.message.reply_text('Запрос данных прерван пользователем.')
+        await update.message.reply_text('Запрос данных прерван пользователем.')
         return ConversationHandler.END
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+        return ConversationHandler.END
 
 
 # обработчик для команды /start
@@ -237,10 +238,12 @@ def main() -> None:
                     await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=f'Событие с номером {text} не найдено. Формат команды: '
                                                   f'/edit_event <номер события> ')
+                    return 0
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При редактировании события произошла ошибка {error_info}.')
+                return 9
 
 
         # редактирование события
