@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # шаги ввода данных
-ID = 1 # range(1)
+ID = range(1)
 
 
 async def cancel(update, context) -> int:
@@ -310,9 +310,6 @@ def main() -> None:
 
         # запуск бота
         application.run_polling()
-
-        # для корректной остановки бота по запросу из ide
-        application.idle()
 
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
