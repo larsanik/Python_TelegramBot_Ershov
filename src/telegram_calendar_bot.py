@@ -15,7 +15,7 @@ from telegram.ext import (
 )
 import src.secrets as secrets  # API_TOKEN = '<ТОКЕN>'
 
-import psycopg2
+import psycopg
 
 # Включение логирования
 logging.basicConfig(
@@ -154,6 +154,34 @@ class Calendar:
             str_out = str_out + '\n'
         return str_out
 
+def conn_db(DB_CONN):
+    try:
+        # Подключение к базе данных
+        conn = psycopg.connect(
+            client_encoding='WIN1251',
+            host=DB_CONN['HOST'],
+            dbname=DB_CONN['DBNAME'],
+            user=DB_CONN['USER'],
+            password=DB_CONN['PASSWORD']
+        )
+
+        # Создание таблицы, если ее нет
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id serial PRIMARY KEY,
+            name text NOT NULL,
+            date date NOT NULL,
+            time time NOT NULL
+        );
+        """)
+        conn.commit()
+
+    except Exception as err:
+        logger.error(err)
+
+
+
 
 def main() -> None:
     """Запуск бота."""
@@ -172,6 +200,9 @@ def main() -> None:
 
         # обработка команды /help
         application.add_handler(CommandHandler('help', help_view))
+
+        # подключение к БД и создание таблицы, если ее нет
+        conn_db(secrets.DB_CONN)
 
         # ***************************
         # глобально доступный объект календаря
@@ -317,22 +348,4 @@ def main() -> None:
         logger.error(f'Произошла ошибка: {err}')
 
 if __name__ == '__main__':
-    # Подключение к базе данных
-    conn = psycopg2.connect(
-        host='localhost',
-        database='postgres',
-        user='postgres',
-        password='1'
-    )
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE events (
-        id serial PRIMARY KEY,
-        name text NOT NULL,
-        date date NOT NULL,
-        time time NOT NULL
-    );
-    """)
-    conn.commit()
-
-    # main()
+    main()
