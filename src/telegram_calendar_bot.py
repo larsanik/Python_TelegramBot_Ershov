@@ -154,15 +154,15 @@ class Calendar:
             str_out = str_out + '\n'
         return str_out
 
-def conn_db(DB_CONN):
+def conn_db(db_conn):
     try:
         # Подключение к базе данных
         conn = psycopg.connect(
             client_encoding='WIN1251',
-            host=DB_CONN['HOST'],
-            dbname=DB_CONN['DBNAME'],
-            user=DB_CONN['USER'],
-            password=DB_CONN['PASSWORD']
+            host=db_conn['HOST'],
+            dbname=db_conn['DBNAME'],
+            user=db_conn['USER'],
+            password=db_conn['PASSWORD']
         )
 
         # Создание таблицы, если ее нет
@@ -176,6 +176,7 @@ def conn_db(DB_CONN):
         );
         """)
         conn.commit()
+        return conn
 
     except Exception as err:
         logger.error(err)
@@ -255,7 +256,7 @@ def main() -> None:
         application.add_handler(CommandHandler('read_event', event_read_handler))
 
         # обработчик для редактирования событий
-        async def event_edit_handler(update, context) -> int :
+        async def event_edit_handler(update, context) -> int | range :
             try:
                 text = update.message.text.replace('/edit_event', '').replace(' ', '')  # оставляем только номер
                 if text.isdigit():  # проверяем, что номер события число
