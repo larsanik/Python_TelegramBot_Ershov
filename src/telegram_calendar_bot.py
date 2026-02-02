@@ -15,6 +15,8 @@ from telegram.ext import (
 )
 import src.secrets as secrets  # API_TOKEN = '<ТОКЕN>'
 
+import psycopg2
+
 # Включение логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -314,6 +316,23 @@ def main() -> None:
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
 
-
 if __name__ == '__main__':
-    main()
+    # Подключение к базе данных
+    conn = psycopg2.connect(
+        host='localhost',
+        database='postgres',
+        user='postgres',
+        password='1'
+    )
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE events (
+        id serial PRIMARY KEY,
+        name text NOT NULL,
+        date date NOT NULL,
+        time time NOT NULL
+    );
+    """)
+    conn.commit()
+
+    # main()
