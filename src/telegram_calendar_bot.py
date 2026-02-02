@@ -109,10 +109,9 @@ async def help_view(update, context) -> None:
                               )
 
 
-# ******** Задание 8 Календарь ********
 # Создать класс Calendar
 class Calendar:
-    def __init__(self):
+    def __init__(self, conn):
         self.events = {}
 
     # метод create_event
