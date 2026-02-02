@@ -113,6 +113,7 @@ async def help_view(update, context) -> None:
 class Calendar:
     def __init__(self, conn):
         self.events = {}
+        self.conn = conn
 
     # метод create_event
     def create_event(self, event_name, event_date, event_time, event_details) -> int:
