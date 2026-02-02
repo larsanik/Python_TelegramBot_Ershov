@@ -203,11 +203,11 @@ def main() -> None:
         application.add_handler(CommandHandler('help', help_view))
 
         # подключение к БД и создание таблицы, если ее нет
-        conn_db(secrets.DB_CONN)
+        conn = conn_db(secrets.DB_CONN)
 
         # ***************************
         # глобально доступный объект календаря
-        calendar = Calendar()
+        calendar = Calendar(conn)
 
         # обработчик для создания событий
         async def event_create_handler(update, context) -> None:
