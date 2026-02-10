@@ -112,20 +112,36 @@ async def help_view(update, context) -> None:
 # Создать класс Calendar
 class Calendar:
     def __init__(self, conn):
-        self.events = {}
+        self.events = {} # to do убрать когда перепишу все методы под БД
         self.conn = conn
 
     # метод create_event
     def create_event(self, event_name, event_date, event_time, event_details) -> int:
-        event_id = len(self.events) + 1
-        event = {
-            "id": event_id,
-            "name": event_name,
-            "date": event_date,
-            "time": event_time,
-            "details": event_details
-        }
-        self.events[event_id] = event
+        # event_id = len(self.events) + 1
+        # event = {
+        #     "id": event_id,
+        #     "name": event_name,
+        #     "date": event_date,
+        #     "time": event_time,
+        #     "details": event_details
+        # }
+        # self.events[event_id] = event
+        cursor = self.conn.cursor()
+        cursor.execute(
+        f"""INSERT
+        INTO
+        events(name, date, time, details)
+        VALUES(
+            '{event_name}',
+            '{event_date}',
+            '{event_time}',
+            '{event_details}'
+            )
+        RETURNING id;
+        """
+        )
+        event_id = cursor.fetchone()[0]
+        self.conn.commit()
         return event_id
 
     # метод read_event
@@ -172,7 +188,8 @@ def conn_db(db_conn):
             id serial PRIMARY KEY,
             name text NOT NULL,
             date date NOT NULL,
-            time time NOT NULL
+            time time NOT NULL,
+            details text NOT NULL
         );
         """)
         conn.commit()
@@ -215,7 +232,7 @@ def main() -> None:
                 # Взять данные о событии из сообщения пользователя
                 event_name = update.message.text[14:]
                 event_date = datetime.datetime.now().strftime('%Y-%m-%d')
-                event_time = datetime.datetime.now().time().strftime('%H:%M')
+                event_time = datetime.datetime.now().time().strftime('%H:%M:%S')
                 event_details = "Описание события"
 
                 # Создать событие с помощью метода create_event класса Calendar
