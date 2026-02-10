@@ -158,7 +158,7 @@ def conn_db(db_conn):
     try:
         # Подключение к базе данных
         conn = psycopg.connect(
-            client_encoding='WIN1251',
+            client_encoding=db_conn['CLIENT_ENCODING'],
             host=db_conn['HOST'],
             dbname=db_conn['DBNAME'],
             user=db_conn['USER'],
