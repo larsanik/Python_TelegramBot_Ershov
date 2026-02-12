@@ -112,20 +112,11 @@ async def help_view(update, context) -> None:
 # Создать класс Calendar
 class Calendar:
     def __init__(self, conn):
-        self.events = {} # to do убрать когда перепишу все методы под БД
+        self.events = {} # todo убрать когда перепишу все методы под БД
         self.conn = conn
 
     # метод create_event
     def create_event(self, event_name, event_date, event_time, event_details) -> int:
-        # event_id = len(self.events) + 1
-        # event = {
-        #     "id": event_id,
-        #     "name": event_name,
-        #     "date": event_date,
-        #     "time": event_time,
-        #     "details": event_details
-        # }
-        # self.events[event_id] = event
         cursor = self.conn.cursor()
         cursor.execute(
         f"""INSERT
@@ -146,9 +137,18 @@ class Calendar:
 
     # метод read_event
     def read_event(self, id_event) -> str:
-        str_out = ''
-        for key, val in self.events[id_event].items():
-            str_out = str_out + str(key) + ': ' + str(val) + ' | '
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT name, date, time, details 
+            FROM events 
+            WHERE id = %s
+            """, (id_event,))
+        row = cursor.fetchone()
+        if row:
+            name, date, time, details = row
+            str_out = f"Событие номер {id_event}:\nНаименование: {name}\nДата: {date}\nВремя: {time}\nДетали: {details}"
+        else:
+            str_out = f"Событие номер {id_event} не найдено"
         return str_out
 
     # метод edit_event
@@ -170,6 +170,7 @@ class Calendar:
             str_out = str_out + '\n'
         return str_out
 
+# функция подключения к БД и создания таблицы событий, если нет
 def conn_db(db_conn):
     try:
         # Подключение к базе данных
@@ -255,15 +256,13 @@ def main() -> None:
                 text = update.message.text.replace('/read_event', '').replace(' ', '')  # оставляем только номер
                 if text.isdigit():  # проверяем, что номер события число
                     id_event = int(text)
-                else:
-                    id_event = 0  # так как нумерация событий начинается с 1
-                if id_event in calendar.events.keys():
                     await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=calendar.read_event(id_event=id_event))
                 else:
                     await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=f'Событие с номером {text} не найдено. Формат команды: '
-                                                  f'/read_event <номер события> ')
+                                             text=f'Не верный формат номера события!'
+                                                  f'\nБыло введен номер события: {text}'
+                                                  f'\nНомер события должен быть целым числом.')
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
