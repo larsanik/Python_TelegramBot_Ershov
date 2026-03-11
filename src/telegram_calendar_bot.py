@@ -151,6 +151,30 @@ class Calendar:
             str_out = f"Событие номер {id_event} не найдено"
         return str_out
 
+    # метод display_event
+    def display_event(self) -> str:
+        # str_out = ''
+        # for el in self.events.items():
+        #     # print(el[1].items())
+        #     for key, val in el[1].items():
+        #         str_out = str_out + str(key) + ': ' + str(val) + ' | '
+        #     str_out = str_out + '\n'
+        cursor = self.conn.cursor()
+        cursor.execute("""
+                    SELECT id, name, date, time, details 
+                    FROM events
+                    """)
+        rows = cursor.fetchall()
+        # rows = [('событие1', datetime.date(2026, 2, 10), datetime.time(15, 16), 'Описание события'), ...] todo убрать
+        str_out = ''
+        for id, name, d, t, details in rows: # todo разобрать запись по человечески посмотри как забирает данные read_event
+            # Форматируем дату (ДД.ММ.ГГГГ) и время (ЧЧ:ММ)
+            date_str = d.strftime("%d.%m.%Y")
+            time_str = t.strftime("%H:%M")
+            line = f"[{date_str} {time_str}] {name}: {details}"
+            str_out = str_out + line + "\n"
+        return str_out
+
     # метод edit_event
     def edit_event(self, id_event, new_event_details) -> None:
         self.events[id_event]['details'] = new_event_details
@@ -159,16 +183,6 @@ class Calendar:
     def delete_event(self, id_event) -> str:
         del self.events[id_event]
         return f'Событие номер {id_event} удалено.'
-
-    # метод display_event
-    def display_event(self) -> str:
-        str_out = ''
-        for el in self.events.items():
-            # print(el[1].items())
-            for key, val in el[1].items():
-                str_out = str_out + str(key) + ': ' + str(val) + ' | '
-            str_out = str_out + '\n'
-        return str_out
 
 # функция подключения к БД и создания таблицы событий, если нет
 def conn_db(db_conn):
@@ -344,7 +358,7 @@ def main() -> None:
         # обработчик для вывода списка событий
         async def event_display_handler(update, context) -> None:
             try:
-                if calendar.events:
+                if True: # calendar.events: todo сделать проверку на наличие записей и откорректировать сообщения
                     await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=calendar.display_event())
                 else:
