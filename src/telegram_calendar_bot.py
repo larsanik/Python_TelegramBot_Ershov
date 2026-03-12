@@ -100,9 +100,9 @@ async def help_view(update, context) -> None:
         /key_on - включение виртуальной клавиатуры
         /key_off - выключение виртуальной клавиатуры
         /create_event <название события> - создание события
-        /read_event <номер события> - чтение события
-        /edit_event <номер события> - редактирование события
-        /delete_event <номер события> - удаление события
+        /read_event <название события> - чтение события
+        /edit_event <название события> - редактирование события
+        /delete_event <название события> - удаление события
         /display_event - вывод списка событий
         /help - выводит справку по командам
         """
@@ -136,19 +136,20 @@ class Calendar:
         return event_id
 
     # метод read_event
-    def read_event(self, id_event) -> str:
+    def read_event(self, event_name) -> str:
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT name, date, time, details 
+            SELECT id, name, date, time, details 
             FROM events 
-            WHERE id = %s
-            """, (id_event,))
+            WHERE name = %s
+            """, (event_name,))
         row = cursor.fetchone()
         if row:
-            name, date, time, details = row
-            str_out = f"Событие номер {id_event}:\nНаименование: {name}\nДата: {date}\nВремя: {time}\nДетали: {details}"
+            event_id, event_name, event_date, event_time, event_details = row
+            str_out = (f"Событие номер {event_id}:\nНаименование: {event_name}\nДата: {event_date}\n"
+                       f"Время: {event_time}\nДетали: {event_details}")
         else:
-            str_out = f"Событие номер {id_event} не найдено"
+            str_out = f"Событие c именем {event_name} не найдено"
         return str_out
 
     # метод display_event
@@ -257,16 +258,9 @@ def main() -> None:
         # обработчик для чтения событий
         async def event_read_handler(update, context) -> None:
             try:
-                text = update.message.text.replace('/read_event', '').replace(' ', '')  # оставляем только номер
-                if text.isdigit():  # проверяем, что номер события число
-                    id_event = int(text)
-                    await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.read_event(id_event=id_event))
-                else:
-                    await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=f'Не верный формат номера события!'
-                                                  f'\nБыло введен номер события: {text}'
-                                                  f'\nНомер события должен быть целым числом.')
+                event_name = update.message.text.replace('/read_event', '').strip()
+                await context.bot.send_message(chat_id=update.message.chat_id,
+                                             text=calendar.read_event(event_name=event_name))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
