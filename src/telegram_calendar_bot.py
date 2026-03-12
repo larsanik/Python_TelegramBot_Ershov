@@ -348,7 +348,7 @@ def main() -> None:
         # обработчик для вывода списка событий
         async def event_display_handler(update, context) -> None:
             try:
-                if True: # calendar.events: todo сделать проверку на наличие записей и откорректировать сообщения
+                if calendar.display_event():
                     await context.bot.send_message(chat_id=update.message.chat_id,
                                              text=calendar.display_event())
                 else:
@@ -357,7 +357,7 @@ def main() -> None:
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При удалении события произошла ошибка {error_info}.')
+                                         text=f'При чтении событий календаря произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
         application.add_handler(CommandHandler('display_event', event_display_handler))
