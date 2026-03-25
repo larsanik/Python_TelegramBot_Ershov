@@ -220,7 +220,8 @@ def conn_db(db_conn):
             name text NOT NULL,
             date date NOT NULL,
             time time NOT NULL,
-            details text NOT NULL
+            details text NOT NULL,
+            tg_user_id text NOT NULL
         );
         """)
         conn.commit()
