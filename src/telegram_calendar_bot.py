@@ -25,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # шаги ввода данных
-ID = range(1)
+ID = 1
 
 
 async def cancel(update, context) -> int:
@@ -167,8 +167,21 @@ class Calendar:
         return str_out
 
     # метод edit_event
-    def edit_event(self, id_event, new_event_details) -> None:
-        self.events[id_event]['details'] = new_event_details
+    def edit_event(self, event_name, new_date=None, new_description=None) -> tuple [str, int]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                           UPDATE events SET date = %s, details = %s WHERE name = %s 
+                           """, (new_date, new_description, event_name))
+            if cursor.rowcount == 0:
+                self.conn.commit()
+                return "Запись не найдена. Обновление не произошло.", 0
+            else:
+                self.conn.commit()
+                return f"Обновлено строк: {cursor.rowcount}", 1
+        except Exception as e:
+            self.conn.rollback()
+            return f"Ошибка БД: {e}", 0
 
     # метод delete_event
     def delete_event(self, id_event) -> str:
@@ -270,23 +283,14 @@ def main() -> None:
         application.add_handler(CommandHandler('read_event', event_read_handler))
 
         # обработчик для редактирования событий
-        async def event_edit_handler(update, context) -> int | range :
+        async def event_edit_handler(update, context) -> int:
             try:
-                text = update.message.text.replace('/edit_event', '').replace(' ', '')  # оставляем только номер
-                if text.isdigit():  # проверяем, что номер события число
-                    id_event = int(text)
-                else:
-                    id_event = 0  # так как нумерация событий начинается с 1
-                if id_event in calendar.events.keys():
-                    context.user_data['id_event'] = id_event
-                    await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text='Введите новое описание события.')
-                    return ID
-                else:
-                    await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=f'Событие с номером {text} не найдено. Формат команды: '
-                                                  f'/edit_event <номер события> ')
-                    return 0
+                event_name = update.message.text.replace('/edit_event', '').strip() # оставляем строку без пробелов в начале и конце
+                context.user_data['editing_event_name'] = event_name
+                await context.bot.send_message(chat_id=update.message.chat_id,
+                                              text='Введите через запятую новую дату и описание события \n'
+                                                   'Формат: <ГГГГ-ММ-ДД>, <Описание события>')
+                return ID
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
@@ -295,12 +299,25 @@ def main() -> None:
 
 
         # редактирование события
-        async def edit_event(update, context) -> None:
+        async def edit_event(update, context) -> int|range|None:
             try:
-                calendar.edit_event(context.user_data['id_event'], update.message.text)
+                list_par = tuple(item.strip() for item in update.message.text.split(',') if item.strip())
+                if len(list_par) < 2:
+                    await update.message.reply_text("Ошибка! Введите данные в формате: <ГГГГ-ММ-ДД>, <Описание события>")
+                    return ID  # Остаемся в этом же состоянии, ждем корректный ввод
+                res_db = calendar.edit_event(context.user_data['editing_event_name'], list_par[0], list_par[1] )
                 # Отправить пользователю подтверждение
-                await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f"Событие {context.user_data['id_event']} отредактировано.")
+                if res_db[1] == 1:
+                    await context.bot.send_message(chat_id=update.message.chat_id,
+                                             text=f"Событие с именем {context.user_data['editing_event_name']} отредактировано.\n"
+                                                  f"{res_db[0]}")
+                if res_db[1] == 0:
+                    await context.bot.send_message(chat_id=update.message.chat_id,
+                                                   text=f"{res_db[0]}")
+
+                # Очищаем временные данные
+                context.user_data.pop('editing_event_name', None)
+                return ConversationHandler.END  # завершаем диалог, чтобы команды снова работали
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
