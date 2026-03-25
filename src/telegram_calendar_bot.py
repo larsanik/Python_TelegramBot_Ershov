@@ -230,6 +230,14 @@ def conn_db(db_conn):
             tg_user_id bigint NOT NULL
         );
         """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bot_users (
+            id serial PRIMARY KEY,
+            tg_login VARCHAR(50) UNIQUE NOT NULL,
+            tg_user_id BIGINT UNIQUE NOT NULL
+        );
+        """)
+
         conn.commit()
         return conn
 
