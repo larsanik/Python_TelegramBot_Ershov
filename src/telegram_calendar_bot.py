@@ -51,9 +51,9 @@ async def create_start_handler(update, context):
         /key_on - включение виртуальной клавиатуры
         /key_off - выключение виртуальной клавиатуры
         /create_event <название события> - создание события
-        /read_event <номер события> - чтение события
-        /edit_event <номер события> - редактирование события
-        /delete_event <номер события> - удаление события
+        /read_event <название события> - чтение события
+        /edit_event <название события> - редактирование события
+        /delete_event <название события> - удаление события
         /display_event - вывод списка событий
         /help - выводит справку по командам
         """
@@ -109,10 +109,9 @@ async def help_view(update, context) -> None:
                               )
 
 
-# Создать класс Calendar
+# класс Calendar
 class Calendar:
     def __init__(self, conn):
-        self.events = {} # todo убрать когда перепишу все методы под БД
         self.conn = conn
 
     # метод create_event
@@ -184,9 +183,22 @@ class Calendar:
             return f"Ошибка БД: {e}", 0
 
     # метод delete_event
-    def delete_event(self, id_event) -> str:
-        del self.events[id_event]
-        return f'Событие номер {id_event} удалено.'
+    def delete_event(self, event_name) -> str:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                           DELETE FROM events WHERE name = %s 
+                           """, (event_name,))
+            if cursor.rowcount == 0:
+                self.conn.commit()
+                return f"Запись c именем {event_name} не найдена. Строка не удалена."
+            else:
+                self.conn.commit()
+                return (f"Запись с именем {event_name} удалена.\n"
+                        f"Удалено записей: {cursor.rowcount}")
+        except Exception as e:
+            self.conn.rollback()
+            return f"Ошибка БД: {e}"
 
 # функция подключения к БД и создания таблицы событий, если нет
 def conn_db(db_conn):
@@ -329,25 +341,17 @@ def main() -> None:
             states={
                 ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_event)],
             },
-            fallbacks=[CommandHandler('cancel', cancel)],  # принудительный выход из диалога по команде /cancel
+            fallbacks=[CommandHandler('cancel', cancel)],  # принудительный выход из диалога по команде
+            # /cancel
         )
         application.add_handler(conv_handler_edit_event)
 
         # обработчик для удаления событий
         async def event_delete_handler(update, context) -> None:
             try:
-                text = update.message.text.replace('/delete_event', '').replace(' ', '')  # оставляем только номер
-                if text.isdigit():  # проверяем, что номер события число
-                    id_event = int(text)
-                else:
-                    id_event = 0  # так как нумерация событий начинается с 1
-                if id_event in calendar.events.keys():
-                    await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.delete_event(id_event=id_event))
-                else:
-                    await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=f'Событие с номером {text} не найдено. Формат команды: '
-                                                  f'/delete_event <номер события> ')
+                text = update.message.text.replace('/delete_event', '').strip()  # оставляем только название
+                await context.bot.send_message(chat_id=update.message.chat_id,
+                                             text=calendar.delete_event(text))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
