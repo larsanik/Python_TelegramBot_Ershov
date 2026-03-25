@@ -55,6 +55,7 @@ async def create_start_handler(update, context):
         /edit_event <название события> - редактирование события
         /delete_event <название события> - удаление события
         /display_event - вывод списка событий
+        /register - регистрация пользователя
         /help - выводит справку по командам
         """
         await context.bot.send_message(chat_id=update.message.chat_id, text=msg_start)
@@ -72,7 +73,8 @@ async def key_on(update, context) -> None:
                       ['/read_event'],
                       ['/edit_event'],
                       ['/delete_event'],
-                      ['/display_event']]
+                      ['/display_event'],
+                      ['/register']]
 
     await update.message.reply_text(
         'Виртуальная клавиатура добавлена в бот.',
@@ -104,6 +106,7 @@ async def help_view(update, context) -> None:
         /edit_event <название события> - редактирование события
         /delete_event <название события> - удаление события
         /display_event - вывод списка событий
+        /register - регистрация пользователя
         /help - выводит справку по командам
         """
                               )
@@ -227,7 +230,7 @@ def conn_db(db_conn):
             date date NOT NULL,
             time time NOT NULL,
             details text NOT NULL,
-            tg_user_id bigint NOT NULL
+            tg_user_id BIGINT UNIQUE NOT NULL
         );
         """)
         cursor.execute("""
