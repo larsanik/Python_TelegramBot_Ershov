@@ -115,17 +115,18 @@ class Calendar:
         self.conn = conn
 
     # метод create_event
-    def create_event(self, event_name, event_date, event_time, event_details) -> int:
+    def create_event(self, event_name, event_date, event_time, event_details, tg_user_id) -> int:
         cursor = self.conn.cursor()
         cursor.execute(
         f"""INSERT
         INTO
-        events(name, date, time, details)
+        events(name, date, time, details, tg_user_id)
         VALUES(
             '{event_name}',
             '{event_date}',
             '{event_time}',
-            '{event_details}'
+            '{event_details}',
+            '{tg_user_id}'
             )
         RETURNING id;
         """
@@ -135,13 +136,14 @@ class Calendar:
         return event_id
 
     # метод read_event
-    def read_event(self, event_name) -> str:
+    def read_event(self, event_name, tg_user_id) -> str:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT id, name, date, time, details 
             FROM events 
             WHERE name = %s
-            """, (event_name,))
+            AND tg_user_id = %s
+            """, (event_name, tg_user_id))
         row = cursor.fetchone()
         if row:
             event_id, event_name, event_date, event_time, event_details = row
@@ -152,29 +154,33 @@ class Calendar:
         return str_out
 
     # метод display_event
-    def display_event(self) -> str:
+    def display_event(self, tg_user_id) -> str:
         cursor = self.conn.cursor()
         cursor.execute("""
                     SELECT id, name, date, time, details 
                     FROM events
-                    """)
+                    WHERE tg_user_id = %s
+                    """, (tg_user_id,))
         rows = cursor.fetchall()
-        str_out = ''
-        for id_event, name, date, time, details in rows:
-            line = f"Событие номер {id_event} | Наименование: {name}| Дата: {date} | Время: {time} | Детали: {details} \n"
-            str_out = str_out + line
-        return str_out
+        if rows:
+            str_out = ''
+            for id_event, name, date, time, details in rows:
+                line = f"Событие номер {id_event} | Наименование: {name}| Дата: {date} | Время: {time} | Детали: {details} \n"
+                str_out = str_out + line
+            return str_out
+        else:
+            return "События не найдены."
 
     # метод edit_event
-    def edit_event(self, event_name, new_date=None, new_description=None) -> tuple [str, int]:
+    def edit_event(self, event_name,tg_user_id, new_date=None, new_description=None) -> tuple [str, int]:
         try:
             cursor = self.conn.cursor()
             cursor.execute("""
-                           UPDATE events SET date = %s, details = %s WHERE name = %s 
-                           """, (new_date, new_description, event_name))
+                           UPDATE events SET date = %s, details = %s WHERE name = %s AND tg_user_id = %s
+                           """, (new_date, new_description, event_name, tg_user_id))
             if cursor.rowcount == 0:
                 self.conn.commit()
-                return "Запись не найдена. Обновление не произошло.", 0
+                return "Событие не найдено.", 0
             else:
                 self.conn.commit()
                 return f"Обновлено строк: {cursor.rowcount}", 1
@@ -183,12 +189,12 @@ class Calendar:
             return f"Ошибка БД: {e}", 0
 
     # метод delete_event
-    def delete_event(self, event_name) -> str:
+    def delete_event(self, event_name, tg_user_id) -> str:
         try:
             cursor = self.conn.cursor()
             cursor.execute("""
-                           DELETE FROM events WHERE name = %s 
-                           """, (event_name,))
+                           DELETE FROM events WHERE name = %s AND tg_user_id = %s 
+                           """, (event_name, tg_user_id))
             if cursor.rowcount == 0:
                 self.conn.commit()
                 return f"Запись c именем {event_name} не найдена. Строка не удалена."
@@ -221,7 +227,7 @@ def conn_db(db_conn):
             date date NOT NULL,
             time time NOT NULL,
             details text NOT NULL,
-            tg_user_id text NOT NULL
+            tg_user_id bigint NOT NULL
         );
         """)
         conn.commit()
@@ -266,9 +272,10 @@ def main() -> None:
                 event_date = datetime.datetime.now().strftime('%Y-%m-%d')
                 event_time = datetime.datetime.now().time().strftime('%H:%M:%S')
                 event_details = "Описание события"
-
+                tg_user_id = update.message.from_user.id # получаем id пользователя в telegram
                 # Создать событие с помощью метода create_event класса Calendar
-                event_id = calendar.create_event(event_name, event_date, event_time, event_details)
+                event_id = calendar.create_event(event_name, event_date, event_time,
+                                                 event_details, tg_user_id)
 
                 # Отправить пользователю подтверждение
                 await context.bot.send_message(chat_id=update.message.chat_id,
@@ -286,7 +293,7 @@ def main() -> None:
             try:
                 event_name = update.message.text.replace('/read_event', '').strip()
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.read_event(event_name=event_name))
+                                             text=calendar.read_event(event_name=event_name, tg_user_id=update.message.from_user.id))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
@@ -318,7 +325,10 @@ def main() -> None:
                 if len(list_par) < 2:
                     await update.message.reply_text("Ошибка! Введите данные в формате: <ГГГГ-ММ-ДД>, <Описание события>")
                     return ID  # Остаемся в этом же состоянии, ждем корректный ввод
-                res_db = calendar.edit_event(context.user_data['editing_event_name'], list_par[0], list_par[1] )
+                res_db = calendar.edit_event(context.user_data['editing_event_name'],
+                                             update.message.from_user.id,
+                                             list_par[0],
+                                             list_par[1] )
                 # Отправить пользователю подтверждение
                 if res_db[1] == 1:
                     await context.bot.send_message(chat_id=update.message.chat_id,
@@ -352,7 +362,7 @@ def main() -> None:
             try:
                 text = update.message.text.replace('/delete_event', '').strip()  # оставляем только название
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.delete_event(text))
+                                             text=calendar.delete_event(text, tg_user_id=update.message.from_user.id))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
@@ -364,9 +374,9 @@ def main() -> None:
         # обработчик для вывода списка событий
         async def event_display_handler(update, context) -> None:
             try:
-                if calendar.display_event():
+                if calendar.display_event(tg_user_id=update.message.from_user.id,):
                     await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.display_event())
+                                             text=calendar.display_event(tg_user_id=update.message.from_user.id))
                 else:
                     await context.bot.send_message(chat_id=update.message.chat_id,
                                              text='В календаре нет событий.')
