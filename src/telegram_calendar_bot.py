@@ -55,7 +55,7 @@ async def create_start_handler(update, context):
         /edit_event <название события> - редактирование события
         /delete_event <название события> - удаление события
         /display_event - вывод списка событий
-        /register - регистрация пользователя
+        /register <логин пользователя> - регистрация пользователя
         /help - выводит справку по командам
         """
         await context.bot.send_message(chat_id=update.message.chat_id, text=msg_start)
@@ -106,7 +106,7 @@ async def help_view(update, context) -> None:
         /edit_event <название события> - редактирование события
         /delete_event <название события> - удаление события
         /display_event - вывод списка событий
-        /register - регистрация пользователя
+        /register <логин пользователя> - регистрация пользователя
         /help - выводит справку по командам
         """
                               )
@@ -205,6 +205,30 @@ class Calendar:
                 self.conn.commit()
                 return (f"Запись с именем {event_name} удалена.\n"
                         f"Удалено записей: {cursor.rowcount}")
+        except Exception as e:
+            self.conn.rollback()
+            return f"Ошибка БД: {e}"
+
+    # метод register
+    def register(self, tg_login, tg_user_id) -> str:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+            f"""INSERT
+            INTO
+            bot_users(tg_login, tg_user_id)
+            VALUES(
+                '{tg_login}',
+                '{tg_user_id}'
+                )
+            """
+            )
+            if cursor.rowcount == 0:
+                self.conn.commit()
+                return f"Пользователь с логином {tg_login} не зарегистрирован."
+            else:
+                self.conn.commit()
+                return f"Пользователь с логином {tg_login} зарегистрирован."
         except Exception as e:
             self.conn.rollback()
             return f"Ошибка БД: {e}"
@@ -396,8 +420,24 @@ def main() -> None:
                 await context.bot.send_message(chat_id=update.message.chat_id,
                                          text=f'При чтении событий календаря произошла ошибка {error_info}.')
 
-        # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
+        # Зарегистрировать обработчик, чтобы он вызывался по команде /display_event
         application.add_handler(CommandHandler('display_event', event_display_handler))
+
+        # обработчик для регистрации пользователя
+        async def register_handler(update, context) -> None:
+            try:
+                text = update.message.text.replace('/register', '').strip()  # оставляем только название
+                await context.bot.send_message(chat_id=update.message.chat_id,
+                                             text=calendar.register(text, tg_user_id=update.message.from_user.id))
+            except AttributeError as error_info:
+                # Отправить пользователю сообщение об ошибке
+                await context.bot.send_message(chat_id=update.message.chat_id,
+                                         text=f'При регистрации пользователя произошла ошибка {error_info}.')
+
+        # Зарегистрировать обработчик, чтобы он вызывался по команде /register
+        application.add_handler(CommandHandler('register', register_handler))
+
+
 
         # запуск бота
         application.run_polling()
