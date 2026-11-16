@@ -1,7 +1,23 @@
 """Проект:
 разработайте Telegram-бот
 с функцией календаря,
-часть 1. Завершено"""
+часть 2. В процессе"""
+
+import os
+import sys
+import django
+from datetime import date
+from asgiref.sync import sync_to_async
+
+# Настройка путей к Django проекту
+DJANGO_PROJECT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'Calbot'))
+sys.path.append(DJANGO_PROJECT_PATH)
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Calbot.settings")
+django.setup()
+
+# Теперь импортируем модель Django и F-выражения для атомарных апдейтов
+from AppCalbot.models import BotStatistics
+from django.db.models import F
 
 import logging
 import datetime
@@ -33,6 +49,8 @@ async def cancel(update, context) -> int:
     try:
         user = update.message.from_user
         logger.info(f"Пользователь {user.first_name} вышел из диалога.")
+        # Фиксируем отмену действий/событий в Django БД
+        await increment_statistic('cancelled_events')
         await update.message.reply_text('Запрос данных прерван пользователем.')
         return ConversationHandler.END
     except AttributeError as err:
@@ -44,6 +62,11 @@ async def cancel(update, context) -> int:
 async def create_start_handler(update, context):
     """Формирование сообщения пользователю по команде start."""
     try:
+        # Пример логики: если вы регистрируете пользователя или проверяете его наличие
+        #tg_user_id = update.message.from_user.id
+
+        # Увеличиваем счетчик пользователей (вызывать только если это действительно новый юзер)
+        await increment_statistic('user_count') # todo добавить условие только для новых пользователей
         msg_start = """ Бот для работы с событиями календаря.
         Команды:
         /start - запуск бота
@@ -109,7 +132,7 @@ async def help_view(update, context) -> None:
         /register <логин пользователя> - регистрация пользователя
         /help - выводит справку по командам
         """
-                              )
+                                    )
 
 
 # класс Calendar
@@ -119,24 +142,24 @@ class Calendar:
 
     # метод create_event
     def create_event(self, event_name, event_date, event_time, event_details, tg_user_id) -> int:
-        cursor = self.conn.cursor()
-        cursor.execute(
-        f"""INSERT
-        INTO
-        events(name, date, time, details, tg_user_id)
-        VALUES(
-            '{event_name}',
-            '{event_date}',
-            '{event_time}',
-            '{event_details}',
-            '{tg_user_id}'
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                    """
+                    INSERT INTO events (name, date, time, details, tg_user_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id;
+                    """,
+                    (event_name, event_date, event_time, event_details, tg_user_id)
             )
-        RETURNING id;
-        """
-        )
-        event_id = cursor.fetchone()[0]
-        self.conn.commit()
-        return event_id
+            event_id = cursor.fetchone()[0]
+            self.conn.commit()
+            return event_id
+        except Exception as e:
+            self.conn.rollback()
+            logger.error(f"Ошибка БД при создании события: {e}")
+            raise
+
 
     # метод read_event
     def read_event(self, event_name, tg_user_id) -> str:
@@ -175,7 +198,7 @@ class Calendar:
             return "События не найдены."
 
     # метод edit_event
-    def edit_event(self, event_name,tg_user_id, new_date=None, new_description=None) -> tuple [str, int]:
+    def edit_event(self, event_name, tg_user_id, new_date=None, new_description=None) -> tuple[str, int]:
         try:
             cursor = self.conn.cursor()
             cursor.execute("""
@@ -214,7 +237,7 @@ class Calendar:
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-            f"""INSERT
+                f"""INSERT
             INTO
             bot_users(tg_login, tg_user_id)
             VALUES(
@@ -232,6 +255,7 @@ class Calendar:
         except Exception as e:
             self.conn.rollback()
             return f"Ошибка БД: {e}"
+
 
 # функция подключения к БД и создания таблицы событий, если нет
 def conn_db(db_conn):
@@ -254,7 +278,7 @@ def conn_db(db_conn):
             date date NOT NULL,
             time time NOT NULL,
             details text NOT NULL,
-            tg_user_id BIGINT UNIQUE NOT NULL
+            tg_user_id BIGINT NOT NULL
         );
         """)
         cursor.execute("""
@@ -272,6 +296,31 @@ def conn_db(db_conn):
         logger.error(err)
 
 
+@sync_to_async
+def increment_statistic(field_name: str, increment_user: bool = False) -> None:
+    """
+    Атомарно увеличивает выбранный счетчик статистики за текущий день.
+    Если строки за сегодня нет — создается новая.
+    """
+    today = date.today()
+
+    # 1. Пытаемся получить или создать запись за сегодня с дефолтными нулями
+    stat, created = BotStatistics.objects.get_or_create(
+        date=today,
+        defaults={
+            'user_count': 0,
+            'event_count': 0,
+            'edited_events': 0,
+            'cancelled_events': 0
+        }
+    )
+
+    # 2. Атомарно увеличиваем нужный счетчик прямо в базе данных
+    update_kwargs = {field_name: F(field_name) + 1}
+    if increment_user:
+        update_kwargs['user_count'] = F('user_count') + 1
+
+    BotStatistics.objects.filter(date=today).update(**update_kwargs)
 
 
 def main() -> None:
@@ -307,18 +356,19 @@ def main() -> None:
                 event_date = datetime.datetime.now().strftime('%Y-%m-%d')
                 event_time = datetime.datetime.now().time().strftime('%H:%M:%S')
                 event_details = "Описание события"
-                tg_user_id = update.message.from_user.id # получаем id пользователя в telegram
+                tg_user_id = update.message.from_user.id  # получаем id пользователя в telegram
                 # Создать событие с помощью метода create_event класса Calendar
                 event_id = calendar.create_event(event_name, event_date, event_time,
                                                  event_details, tg_user_id)
-
+                # Фиксируем создание события в Django БД
+                await increment_statistic('event_count')
                 # Отправить пользователю подтверждение
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f"Событие {event_name} создано и имеет номер {event_id}.")
+                                               text=f"Событие {event_name} создано и имеет номер {event_id}.")
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При создании события произошла ошибка {error_info}.')
+                                               text=f'При создании события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /create_event
         application.add_handler(CommandHandler('create_event', event_create_handler))
@@ -328,11 +378,12 @@ def main() -> None:
             try:
                 event_name = update.message.text.replace('/read_event', '').strip()
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.read_event(event_name=event_name, tg_user_id=update.message.from_user.id))
+                                               text=calendar.read_event(event_name=event_name,
+                                                                        tg_user_id=update.message.from_user.id))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При чтении события произошла ошибка {error_info}.')
+                                               text=f'При чтении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /read_event
         application.add_handler(CommandHandler('read_event', event_read_handler))
@@ -340,35 +391,38 @@ def main() -> None:
         # обработчик для редактирования событий
         async def event_edit_handler(update, context) -> int:
             try:
-                event_name = update.message.text.replace('/edit_event', '').strip() # оставляем строку без пробелов в начале и конце
+                event_name = update.message.text.replace('/edit_event',
+                                                         '').strip()  # оставляем строку без пробелов в начале и конце
                 context.user_data['editing_event_name'] = event_name
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                              text='Введите через запятую новую дату и описание события \n'
-                                                   'Формат: <ГГГГ-ММ-ДД>, <Описание события>')
+                                               text='Введите через запятую новую дату и описание события \n'
+                                                    'Формат: <ГГГГ-ММ-ДД>, <Описание события>')
                 return ID
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При редактировании события произошла ошибка {error_info}.')
+                                               text=f'При редактировании события произошла ошибка {error_info}.')
                 return 9
 
-
         # редактирование события
-        async def edit_event(update, context) -> int|range|None:
+        async def edit_event(update, context) -> int | range | None:
             try:
                 list_par = tuple(item.strip() for item in update.message.text.split(',') if item.strip())
                 if len(list_par) < 2:
-                    await update.message.reply_text("Ошибка! Введите данные в формате: <ГГГГ-ММ-ДД>, <Описание события>")
+                    await update.message.reply_text(
+                        "Ошибка! Введите данные в формате: <ГГГГ-ММ-ДД>, <Описание события>")
                     return ID  # Остаемся в этом же состоянии, ждем корректный ввод
                 res_db = calendar.edit_event(context.user_data['editing_event_name'],
                                              update.message.from_user.id,
                                              list_par[0],
-                                             list_par[1] )
+                                             list_par[1])
                 # Отправить пользователю подтверждение
                 if res_db[1] == 1:
                     await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=f"Событие с именем {context.user_data['editing_event_name']} отредактировано.\n"
-                                                  f"{res_db[0]}")
+                                                   text=f"Событие с именем {context.user_data['editing_event_name']} отредактировано.\n"
+                                                        f"{res_db[0]}")
+                    # Фиксируем редактирование события в Django БД
+                    await increment_statistic('edited_events')
                 if res_db[1] == 0:
                     await context.bot.send_message(chat_id=update.message.chat_id,
                                                    text=f"{res_db[0]}")
@@ -379,7 +433,7 @@ def main() -> None:
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При редактировании события произошла ошибка {error_info}.')
+                                               text=f'При редактировании события произошла ошибка {error_info}.')
 
         # диалог для редактирования события, шаги ID, TEXT
         conv_handler_edit_event = ConversationHandler(
@@ -397,11 +451,11 @@ def main() -> None:
             try:
                 text = update.message.text.replace('/delete_event', '').strip()  # оставляем только название
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.delete_event(text, tg_user_id=update.message.from_user.id))
+                                               text=calendar.delete_event(text, tg_user_id=update.message.from_user.id))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При удалении события произошла ошибка {error_info}.')
+                                               text=f'При удалении события произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /delete_event
         application.add_handler(CommandHandler('delete_event', event_delete_handler))
@@ -409,16 +463,16 @@ def main() -> None:
         # обработчик для вывода списка событий
         async def event_display_handler(update, context) -> None:
             try:
-                if calendar.display_event(tg_user_id=update.message.from_user.id,):
+                if calendar.display_event(tg_user_id=update.message.from_user.id, ):
                     await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.display_event(tg_user_id=update.message.from_user.id))
+                                                   text=calendar.display_event(tg_user_id=update.message.from_user.id))
                 else:
                     await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text='В календаре нет событий.')
+                                                   text='В календаре нет событий.')
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При чтении событий календаря произошла ошибка {error_info}.')
+                                               text=f'При чтении событий календаря произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /display_event
         application.add_handler(CommandHandler('display_event', event_display_handler))
@@ -428,22 +482,21 @@ def main() -> None:
             try:
                 text = update.message.text.replace('/register', '').strip()  # оставляем только название
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                             text=calendar.register(text, tg_user_id=update.message.from_user.id))
+                                               text=calendar.register(text, tg_user_id=update.message.from_user.id))
             except AttributeError as error_info:
                 # Отправить пользователю сообщение об ошибке
                 await context.bot.send_message(chat_id=update.message.chat_id,
-                                         text=f'При регистрации пользователя произошла ошибка {error_info}.')
+                                               text=f'При регистрации пользователя произошла ошибка {error_info}.')
 
         # Зарегистрировать обработчик, чтобы он вызывался по команде /register
         application.add_handler(CommandHandler('register', register_handler))
-
-
 
         # запуск бота
         application.run_polling()
 
     except AttributeError as err:
         logger.error(f'Произошла ошибка: {err}')
+
 
 if __name__ == '__main__':
     main()
