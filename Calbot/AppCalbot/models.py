@@ -25,5 +25,5 @@ class BotStatistics(models.Model):
         verbose_name = "Статистика бота"
         verbose_name_plural = "Статистика бота"
 
-    def __type__(self):
-        return f"Статистика за {self.date}"
+    def __str__(self):
+        return f"Статистика за {self.date.strftime('%d.%m.%Y')}"

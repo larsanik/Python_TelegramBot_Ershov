@@ -15,7 +15,7 @@ sys.path.append(DJANGO_PROJECT_PATH)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Calbot.settings")
 django.setup()
 
-# Теперь импортируем модель Django и F-выражения для атомарных апдейтов
+# Теперь импортируем модель Django и F-выражения для атомарных обновлений
 from AppCalbot.models import BotStatistics
 from django.db.models import F
 
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 ID = 1
 
 
-async def cancel(update, context) -> int:
+async def cancel(update, _) -> int:
     """Выход из диалога по команде /cancel."""
     try:
         user = update.message.from_user
@@ -62,11 +62,12 @@ async def cancel(update, context) -> int:
 async def create_start_handler(update, context):
     """Формирование сообщения пользователю по команде start."""
     try:
-        # Пример логики: если вы регистрируете пользователя или проверяете его наличие
-        #tg_user_id = update.message.from_user.id
-
         # Увеличиваем счетчик пользователей (вызывать только если это действительно новый юзер)
-        await increment_statistic('user_count') # todo добавить условие только для новых пользователей
+        tg_user_id = update.message.from_user.id
+        calendar = context.bot_data['calendar']
+        if calendar.new_user_today(tg_user_id):
+            await increment_statistic('user_count')
+
         msg_start = """ Бот для работы с событиями календаря.
         Команды:
         /start - запуск бота
@@ -87,7 +88,7 @@ async def create_start_handler(update, context):
         await context.bot.send_message(chat_id=update.message.chat_id, text=f"Произошла ошибка: {err}")
 
 
-async def key_on(update, context) -> None:
+async def key_on(update, _) -> None:
     """Добавляет виртуальную клавиатуру с командами"""
     reply_keyboard = [['/start'],
                       ['/key_off'],
@@ -108,7 +109,7 @@ async def key_on(update, context) -> None:
     )
 
 
-async def key_off(update, context) -> None:
+async def key_off(update, _) -> None:
     """Убирает виртуальную клавиатуру с командами"""
     await update.message.reply_text(
         'Виртуальная клавиатура убрана из бота.',
@@ -116,7 +117,7 @@ async def key_off(update, context) -> None:
     )
 
 
-async def help_view(update, context) -> None:
+async def help_view(update, _) -> None:
     """Выводит справку по командам"""
     await update.message.reply_text(""" Бот для работы с заметками.
         Команды:
@@ -190,8 +191,8 @@ class Calendar:
         rows = cursor.fetchall()
         if rows:
             str_out = ''
-            for id_event, name, date, time, details in rows:
-                line = f"Событие номер {id_event} | Наименование: {name}| Дата: {date} | Время: {time} | Детали: {details} \n"
+            for id_event, name, event_date, time, details in rows:
+                line = f"Событие номер {id_event} | Наименование: {name}| Дата: {event_date} | Время: {time} | Детали: {details} \n"
                 str_out = str_out + line
             return str_out
         else:
@@ -256,6 +257,36 @@ class Calendar:
             self.conn.rollback()
             return f"Ошибка БД: {e}"
 
+    # метод для определения суточной уникальности пользователя
+    def new_user_today(self, tg_user_id: int) -> bool:
+        try:
+            now = datetime.datetime.now()
+            enter_date = now.strftime('%Y-%m-%d')
+            enter_time = now.strftime('%H:%M:%S')
+
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO bot_users_entry (date, time, tg_user_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (tg_user_id, date) DO NOTHING
+                RETURNING id;
+                """,
+                (enter_date, enter_time, tg_user_id)
+            )
+            # Если вставка прошла (первый заход за день), вернется кортеж с id.
+            # Если запись уже была — вернется None.
+            inserted = cursor.fetchone()
+            self.conn.commit()
+            return inserted is not None
+
+        except Exception as e:
+            self.conn.rollback()
+            logger.error(f"Ошибка БД при проверке входа пользователя: {e}")
+            raise
+
+
+
 
 # функция подключения к БД и создания таблицы событий, если нет
 def conn_db(db_conn):
@@ -288,7 +319,15 @@ def conn_db(db_conn):
             tg_user_id BIGINT UNIQUE NOT NULL
         );
         """)
-
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_users_entry (
+            id serial PRIMARY KEY,
+            date date NOT NULL,
+            time time NOT NULL,
+            tg_user_id BIGINT NOT NULL,
+            UNIQUE (tg_user_id, date)
+        );
+        """)
         conn.commit()
         return conn
 
@@ -296,6 +335,7 @@ def conn_db(db_conn):
         logger.error(err)
 
 
+# Метод для ведения статистики
 @sync_to_async
 def increment_statistic(field_name: str, increment_user: bool = False) -> None:
     """
@@ -305,7 +345,7 @@ def increment_statistic(field_name: str, increment_user: bool = False) -> None:
     today = date.today()
 
     # 1. Пытаемся получить или создать запись за сегодня с дефолтными нулями
-    stat, created = BotStatistics.objects.get_or_create(
+    BotStatistics.objects.get_or_create(
         date=today,
         defaults={
             'user_count': 0,
@@ -323,15 +363,24 @@ def increment_statistic(field_name: str, increment_user: bool = False) -> None:
     BotStatistics.objects.filter(date=today).update(**update_kwargs)
 
 
+
 def main() -> None:
     """Запуск бота."""
     try:
+        # подключение к БД и создание таблицы, если ее нет
+        conn = conn_db(secrets.DB_CONN)
+
+        # ***************************
+        # глобально доступный объект календаря
+        calendar = Calendar(conn)
+
         # создание обработчика с токеном
         application = Application.builder().token(secrets.API_TOKEN).build()
 
+        application.bot_data['calendar'] = calendar
+
         # обработка команды /start
         application.add_handler(CommandHandler('start', create_start_handler))
-
         # обработка команды /key_on
         application.add_handler(CommandHandler('key_on', key_on))
 
@@ -340,13 +389,6 @@ def main() -> None:
 
         # обработка команды /help
         application.add_handler(CommandHandler('help', help_view))
-
-        # подключение к БД и создание таблицы, если ее нет
-        conn = conn_db(secrets.DB_CONN)
-
-        # ***************************
-        # глобально доступный объект календаря
-        calendar = Calendar(conn)
 
         # обработчик для создания событий
         async def event_create_handler(update, context) -> None:
