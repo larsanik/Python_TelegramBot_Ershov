@@ -14,6 +14,7 @@ DJANGO_PROJECT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '.
 sys.path.append(DJANGO_PROJECT_PATH)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Calbot.settings")
 django.setup()
+from AppCalbot.services import get_user_busy_intervals # импорт строго после django.setup()
 
 # Теперь импортируем модель Django и F-выражения для атомарных обновлений
 from AppCalbot.models import BotStatistics
@@ -67,6 +68,12 @@ async def create_start_handler(update, context):
         calendar = context.bot_data['calendar']
         if calendar.new_user_today(tg_user_id):
             await increment_statistic('user_count')
+
+        # todo это просто посмотреть)))))
+        get_busy_async = sync_to_async(get_user_busy_intervals)
+        intervals = await get_busy_async(user=2)
+        print(intervals)
+
 
         msg_start = """ Бот для работы с событиями календаря.
         Команды:

@@ -6,6 +6,11 @@ class Event(models.Model):
     name = models.CharField(verbose_name='Имя',max_length=255)
     date = models.DateField(verbose_name='Дата')
     time = models.TimeField(verbose_name='Время')
+    duration_minutes = models.PositiveIntegerField(
+        default=60,
+        verbose_name="Длительность (в минутах)",
+        help_text="Укажите продолжительность события в минутах, например 60"
+    )
 
     class Meta:
         verbose_name = "Событие"
@@ -15,7 +20,7 @@ class Event(models.Model):
         return f"Событие {self.name}"
 
     def __str__(self):
-        return f"Событие {self.name} - {self.date} - {self.time}"
+        return f"Событие {self.name} - {self.date} - {self.time}, длительность {self.duration_minutes} минут"
 
 # статистика бота
 class BotStatistics(models.Model):
@@ -55,4 +60,4 @@ class Appointment(models.Model):
         verbose_name_plural = "Встречи"
 
     def __str__(self):
-        return f"Встреча: {self.user.name} - {self.event.name} - {self.date} - {self.time}"
+        return f"Встреча: {self.user.username} - {self.event.name} - {self.date} - {self.time}"
