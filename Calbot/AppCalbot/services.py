@@ -26,7 +26,6 @@ def get_user_busy_intervals(user, target_date=None, default_duration_minutes = 6
     busy_intervals = []
     for app in appointments:
         start_dt = datetime.combine(app.date, app.time)
-        # Если у модели Event есть поле длительности (например, duration), можно брать его:
         duration = getattr(app.event, 'duration_minutes', default_duration_minutes)
         end_dt = start_dt + timedelta(minutes=duration)
 
