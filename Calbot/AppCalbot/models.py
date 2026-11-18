@@ -16,9 +16,6 @@ class Event(models.Model):
         verbose_name = "Событие"
         verbose_name_plural = "События"
 
-    def __type__(self):
-        return f"Событие {self.name}"
-
     def __str__(self):
         return f"Событие {self.name} - {self.date} - {self.time}, длительность {self.duration_minutes} минут"
 
@@ -61,3 +58,37 @@ class Appointment(models.Model):
 
     def __str__(self):
         return f"Встреча: {self.user.username} - {self.event.name} - {self.date} - {self.time}"
+
+
+class TelegramUser(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='telegram_profile',
+        verbose_name="Пользователь Django"
+    )
+    tg_user_id = models.BigIntegerField(unique=True, verbose_name="Telegram ID")
+    tg_login = models.CharField(max_length=50, verbose_name="Telegram логин")
+
+    class Meta:
+        verbose_name = "Пользователь Telegram"
+        verbose_name_plural = "Пользователи Telegram"
+
+    def __str__(self):
+        return f"{self.tg_login} ({self.tg_user_id})"
+
+
+class UserDailyEntry(models.Model):
+    tg_user_id = models.BigIntegerField(verbose_name="Telegram ID")
+    date = models.DateField(auto_now_add=True, verbose_name="Дата входа")
+    time = models.TimeField(auto_now_add=True, verbose_name="Время входа")
+
+    class Meta:
+        verbose_name = "Суточный визит"
+        verbose_name_plural = "Суточные визиты"
+        constraints = [
+            models.UniqueConstraint(fields=['tg_user_id', 'date'], name='unique_daily_entry')
+        ]
+
+    def __str__(self):
+        return f"Первый вход за сутки пользователя с Telegram ID: {self.tg_user_id}"
