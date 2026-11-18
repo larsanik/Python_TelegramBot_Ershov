@@ -62,7 +62,7 @@ def get_user_busy_intervals(user, target_date=None) -> list[dict]:
     return busy_intervals
 
 
-# --- CRUD для встреч пользователя через бота ---
+# --- CRUDelDisp для встреч пользователя c использованием бота ---
 
 def create_user_event(tg_user_id: int, event_name: str) -> str:
     user = get_django_user(tg_user_id)
@@ -90,7 +90,7 @@ def create_user_event(tg_user_id: int, event_name: str) -> str:
         status='confirmed'
     )
     increment_statistic('event_count')
-    return f"Событие «{event.name}» создано и имеет номер {appointment.id}."
+    return f"Событие «{event.name}» создано и имеет номер {appointment.pk}."
 
 
 def read_user_event(tg_user_id: int, event_name: str) -> str:
@@ -105,7 +105,7 @@ def read_user_event(tg_user_id: int, event_name: str) -> str:
         return f"Событие с именем «{event_name}» не найдено."
 
     return (
-        f"Событие номер {app.id}:\n"
+        f"Событие номер {app.pk}:\n"
         f"Наименование: {app.event.name}\n"
         f"Дата: {app.date}\n"
         f"Время: {app.time}\n"
@@ -127,7 +127,7 @@ def display_user_events(tg_user_id: int) -> str:
         return "В календаре нет событий."
 
     lines = [
-        f"Событие №{a.id} | {a.event.name} | Дата: {a.date} | Время: {a.time} | Детали: {a.details}"
+        f"Событие №{a.pk} | {a.event.name} | Дата: {a.date} | Время: {a.time} | Детали: {a.details}"
         for a in appointments
     ]
     return "\n".join(lines)
