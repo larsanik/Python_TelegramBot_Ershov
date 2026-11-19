@@ -61,6 +61,33 @@ def get_user_busy_intervals(user, target_date=None) -> list[dict]:
         })
     return busy_intervals
 
+def user_invitations_to_event(user, event) -> bool:
+    """Приглашает пользователя на событие, запрашивает базу данных, чтобы проверить,
+    свободен ли предполагаемый участник в дату и время встречи. Если свободен,
+    функция обновляет статус встречи на «ожидание»"""
+
+    user_busy_intervals = get_user_busy_intervals(user)
+
+    for interval in user_busy_intervals:
+        # Проверяем дату, если интервал содержит ключ 'date'
+        if "date" in interval and interval["date"] != event.date:
+            continue
+
+        if interval["start"] <= event.time <= interval["end"]:
+            return False  # Пользователь занят
+
+    # Если пересечений нет — создаем или обновляем встречу со статусом pending
+    Appointment.objects.update_or_create(
+        user=user,
+        event=event,
+        date=event.date,
+        defaults={
+            "time": event.time,
+            "status": "pending",
+        },
+    )
+    return True
+
 
 # --- CRUDelDisp для встреч пользователя c использованием бота ---
 
